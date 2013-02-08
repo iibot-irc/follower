@@ -1,0 +1,5 @@
+A simple python program to grab a persons last tweet and show it on the
+terminal.
+
+Designed to be used with ii and cron to create an ircbot that follows certain
+public twitter accounts. Has no dependencies outside of core python.
