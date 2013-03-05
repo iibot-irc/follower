@@ -59,14 +59,25 @@ def get_latest_tweet(user):
     resp_json =  conn.getresponse().read()
     resp = json.loads(resp_json)
     old_id = "0"
-    #hackety hackety
+    tmpfile = None
     try:
-        old_id = open("/tmp/cscbot_twitter_%s" % user, "r").read()
+        tmpfile =  open("/tmp/cscbot_twitter_%s" % user, "r")
+        old_id = tmpfile.read()
+        tmpfile.close()
     except:
+        if tmpfile != None:
+            tmpfile.close()
         pass
     if str(resp[0]['id']) != old_id:
-        print "< " + user + ">: " + resp[0]['text']
-        open("/tmp/cscbot_twitter_%s" % user, "w").write(str(resp[0]['id']))
+        print "< " + user + "> " + resp[0]['text'].encode('ascii', 'ignore')
+    try:
+        tmpfile = open("/tmp/cscbot_twitter_%s" % user, "w")
+        tmpfile.write(str(resp[0]['id']))
+        tmpfile.close()
+    except:
+        if tmpfile != None:
+            tmpfile.close()
+        pass
 
 if __name__ == '__main__':
     if len(sys.argv) < 2:
