@@ -147,7 +147,7 @@ def send_tweet(msg, irc_user):
     if 'id_str' in resp:
         print '\0037::\003 https://m.twitter.com/' + HANDLE + '/status/' + str(resp['id_str'])
     else:
-        print 'bonk bonk glorp: ' + str(resp)
+        print irc_user + ': bonk bonk glorp: ' + str(resp)
         sys.exit(1)
 
 def get_latest_tweet(screen_name, filtered=False):
