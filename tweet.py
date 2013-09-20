@@ -150,11 +150,16 @@ def send_tweet(msg, irc_user):
         print 'bonk bonk glorp: ' + str(resp)
         sys.exit(1)
 
-def get_latest_tweet(screen_name):
+def get_latest_tweet(screen_name, filtered=False):
     resp = api_call(
         verb   = 'GET',
         route  = STATUS_PATH,
-        params = { 'count': '5', 'screen_name': screen_name })
+        params = {
+            'include_rts': not filtered,
+            'exclude_replies': filtered,
+            'count': '5',
+            'screen_name': screen_name
+        })
 
     old_id = try_read_file(TWEET_FILE_BASE + screen_name, '0')
 
@@ -246,7 +251,8 @@ if __name__ == '__main__':
         sys.exit(1)
 
     if sys.argv[1] == 'get_tweets':
-        get_latest_tweet(sys.argv[2])
+        filtered = len(sys.argv) == 4 and sys.argv[3] == 'filter'
+        get_latest_tweet(sys.argv[2], filtered)
     elif sys.argv[1] == 'tweet':
         send_tweet(sys.argv[2], sys.argv[3])
     elif sys.argv[1] == 'delete_tweet':
