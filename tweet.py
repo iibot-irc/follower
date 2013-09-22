@@ -248,6 +248,16 @@ def get_latest_tweet_id(name):
         params = { 'screen_name': name, 'count': '1', 'include_rts': '1', 'trim_user': 'true' })
     return str(resp[0]['id'])
 
+def find_tweet_id_substr(name, frag):
+    resp = api_call(
+        verb   = 'GET',
+        route  = STATUS_PATH,
+        params = { 'screen_name': name, 'count': '70', 'include_rts': '1', 'trim_user': 'true' })
+    for tweet in resp:
+        if frag in tweet['text']:
+            return str(tweet['id'])
+    raise Exception('No such tweet?')
+
 def get_mentions():
     # TODO: filter out mentions from people we follow?
     old_id = int(try_read_file(MENTIONS_FILE, '1'))
@@ -275,7 +285,9 @@ if __name__ == '__main__':
     elif sys.argv[1] == 'tweet':
         send_tweet(sys.argv[2], sys.argv[3])
     elif sys.argv[1] == 'retweet':
-        if sys.argv[2].isdigit():
+        if len(sys.argv) == 4:
+            tweet_id = find_tweet_id_substr(sys.argv[2], sys.argv[3])
+        elif sys.argv[2].isdigit():
             tweet_id = sys.argv[2]
         else:
             tweet_id = get_latest_tweet_id(sys.argv[2])
