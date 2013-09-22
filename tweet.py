@@ -246,7 +246,10 @@ def get_latest_tweet_id(name):
         verb   = 'GET',
         route  = STATUS_PATH,
         params = { 'screen_name': name, 'count': '1', 'include_rts': '1', 'trim_user': 'true' })
-    return str(resp[0]['id'])
+    if isinstance(resp, (list, tuple)) and len(resp) > 0:
+        return str(resp[0]['id'])
+    else:
+        return ""
 
 def find_tweet_id_substr(name, frag):
     resp = api_call(
@@ -256,7 +259,7 @@ def find_tweet_id_substr(name, frag):
     for tweet in resp:
         if frag in tweet['text']:
             return str(tweet['id'])
-    raise Exception('No such tweet?')
+    return ""
 
 def get_mentions():
     # TODO: filter out mentions from people we follow?
@@ -291,7 +294,10 @@ if __name__ == '__main__':
             tweet_id = sys.argv[2]
         else:
             tweet_id = get_latest_tweet_id(sys.argv[2])
-        retweet(tweet_id)
+        if tweet_id == "":
+            print "Couldn't find tweet :("
+        else:
+            retweet(tweet_id)
     elif sys.argv[1] == 'delete_tweet':
         delete_tweet(sys.argv[2])
     elif sys.argv[1] == 'update_followers':
