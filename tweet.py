@@ -164,11 +164,15 @@ def get_latest_tweet(screen_name, chan, filtered=False):
 
     old_id = try_read_file(TWEET_FILE, '0')
 
+    out = []
     for r in resp:
         if str(r['id']) != old_id:
-            print "\0036@@\003 " + screen_name + ": " + r['text'].encode('ascii', 'ignore')
+            out += ["\0036@@\003 " + screen_name + ": " + r['text'].encode('ascii', 'ignore')]
         else:
             break
+
+    out.reverse()
+    print '\n'.join(out)
 
     write_file(TWEET_FILE, str(resp[0]['id']))
 
