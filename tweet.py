@@ -239,7 +239,7 @@ def retweet(tweet_id):
     resp = api_call(
         verb  = 'POST',
         route = RETWEETS_PATH + tweet_id + '.json')
-    print '\0037RT\'d\003 @' + resp['user']['screen_name'] + ': ' + resp['text'] + ' ( ' + resp['id_str'] + ' )'
+    print '\0037RT\'d\003: ' + resp['text'] + ' ( ' + resp['id_str'] + ' )'
 
 def get_latest_tweet_id(name):
     resp = api_call(
