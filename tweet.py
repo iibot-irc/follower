@@ -22,14 +22,15 @@ ACCESS_SECRET   = config('twitter.accessSecret')
 
 API_TARGET = 'api.twitter.com'
 
-STATUS_PATH     = '/1.1/statuses/user_timeline.json'
-UPDATE_PATH     = '/1.1/statuses/update.json'
-DESTROY_PATH    = '/1.1/statuses/destroy/'
-FOLLOWERS_PATH  = '/1.1/followers/ids.json'
-LOOKUP_PATH     = '/1.1/users/lookup.json'
-MENTIONS_PATH   = '/1.1/statuses/mentions_timeline.json'
-RETWEETS_PATH   = '/1.1/statuses/retweets_of_me.json'
-RETWEETERS_PATH = '/1.1/statuses/retweeters/ids.json'
+STATUS_PATH         = '/1.1/statuses/user_timeline.json'
+UPDATE_PATH         = '/1.1/statuses/update.json'
+DESTROY_PATH        = '/1.1/statuses/destroy/'
+FOLLOWERS_PATH      = '/1.1/followers/ids.json'
+LOOKUP_PATH         = '/1.1/users/lookup.json'
+MENTIONS_PATH       = '/1.1/statuses/mentions_timeline.json'
+RETWEETS_OF_ME_PATH = '/1.1/statuses/retweets_of_me.json'
+RETWEETERS_PATH     = '/1.1/statuses/retweeters/ids.json'
+RETWEETS_PATH       = '/1.1/statuses/retweet/'
 
 STATE_DIR = expanduser('~') + '/state/'
 
@@ -214,7 +215,7 @@ def get_retweets():
     data = json.loads(try_read_file(RETWEETS_FILE, '{}'))
     resp = api_call(
         verb   = 'GET',
-        route  = RETWEETS_PATH,
+        route  = RETWEETS_OF_ME_PATH,
         params = { 'trim_user': 'true', 'include_entities': 'false', 'count': '3' })
     for tweet in resp:
         old_uids = []
@@ -233,6 +234,19 @@ def get_retweets():
             text = unicode(tweet['text'], 'utf-8')
             print '\0037RT\003 ' + screen_name + ': ' + text
     write_file(RETWEETS_FILE, json.dumps(data, sort_keys=True, indent=4, separators=(',', ':')))
+
+def retweet(tweet_id):
+    resp = api_call(
+        verb  = 'POST',
+        route = RETWEETS_PATH + tweet_id + '.json')
+    print '\0037RT\'d\003 @' + resp['user']['screen_name'] + ': ' + resp['text'] + ' ( ' + resp['id_str'] + ' )'
+
+def get_latest_tweet_id(name):
+    resp = api_call(
+        verb   = 'GET',
+        route  = STATUS_PATH,
+        params = { 'screen_name': name, 'count': '1', 'include_rts': '1', 'trim_user': 'true' })
+    return str(resp[0]['id'])
 
 def get_mentions():
     # TODO: filter out mentions from people we follow?
@@ -260,6 +274,12 @@ if __name__ == '__main__':
         get_latest_tweet(sys.argv[2], sys.argv[3], filtered)
     elif sys.argv[1] == 'tweet':
         send_tweet(sys.argv[2], sys.argv[3])
+    elif sys.argv[1] == 'retweet':
+        if sys.argv[2].isdigit():
+            tweet_id = sys.argv[2]
+        else:
+            tweet_id = get_latest_tweet_id(sys.argv[2])
+        retweet(tweet_id)
     elif sys.argv[1] == 'delete_tweet':
         delete_tweet(sys.argv[2])
     elif sys.argv[1] == 'update_followers':
