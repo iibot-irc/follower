@@ -216,7 +216,9 @@ def get_retweets():
     resp = api_call(
         verb   = 'GET',
         route  = RETWEETS_OF_ME_PATH,
-        params = { 'trim_user': 'true', 'include_entities': 'false', 'count': '3' })
+        params = { 'trim_user': 'true', 'include_entities': 'false', 'count': '5' })
+    if 'errors' in resp:
+        raise Exception(resp['errors'])
     for tweet in resp:
         old_uids = []
         if tweet['id_str'] in data:
@@ -231,8 +233,7 @@ def get_retweets():
             continue
         news = fetch_names(news)
         for screen_name in news:
-            text = unicode(tweet['text'], 'utf-8')
-            print '\0037RT\003 ' + screen_name + ': ' + text
+            print (u'\0037RT\003 ' + screen_name + u': ' + tweet['text']).encode('utf-8')
     write_file(RETWEETS_FILE, json.dumps(data, sort_keys=True, indent=4, separators=(',', ':')))
 
 def retweet(tweet_id):
