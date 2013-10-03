@@ -31,6 +31,7 @@ MENTIONS_PATH       = '/1.1/statuses/mentions_timeline.json'
 RETWEETS_OF_ME_PATH = '/1.1/statuses/retweets_of_me.json'
 RETWEETERS_PATH     = '/1.1/statuses/retweeters/ids.json'
 RETWEETS_PATH       = '/1.1/statuses/retweet/'
+RATE_LIMIT_PATH     = '/1.1/application/rate_limit_status'
 
 STATE_DIR = expanduser('~') + '/state/'
 
@@ -86,7 +87,7 @@ def make_oauth_headers(verb, uri, params, body):
     oauth_params['oauth_signature'] = signature
     return { 'Authorization' : make_auth_header(uri, oauth_params) }
 
-def api_call(verb, route, params = {}, headers = {}, body = None):
+def api_call(verb, route, params = {}, headers = {}, body = None, json = False):
     uri = API_TARGET + route
     conn = httplib.HTTPSConnection(API_TARGET)
     headers.update(make_oauth_headers(verb, uri, params, body))
@@ -278,6 +279,13 @@ def get_mentions():
 
     write_file(MENTIONS_FILE, str(old_id))
 
+def get_rate_limits():
+  resp = api_call(
+      verb  = 'GET',
+      route = RATE_LIMIT_PATH,
+      json  = True)
+  print resp
+
 if __name__ == '__main__':
     if len(sys.argv) < 2:
         print 'Supply command and at least one argument.'
@@ -307,5 +315,7 @@ if __name__ == '__main__':
         get_mentions()
     elif sys.argv[1] == 'get_retweets':
         get_retweets()
+    elif sys.argv[1] == 'get_rate_limits':
+        get_rate_limits()
     else:
         print 'Unknown command'
