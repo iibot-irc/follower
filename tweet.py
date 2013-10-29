@@ -3,6 +3,7 @@ import binascii
 import hashlib
 import hmac
 import httplib
+import HTMLParser
 import random
 import sys
 import time
@@ -31,7 +32,7 @@ MENTIONS_PATH       = '/1.1/statuses/mentions_timeline.json'
 RETWEETS_OF_ME_PATH = '/1.1/statuses/retweets_of_me.json'
 RETWEETERS_PATH     = '/1.1/statuses/retweeters/ids.json'
 RETWEETS_PATH       = '/1.1/statuses/retweet/'
-RATE_LIMIT_PATH     = '/1.1/application/rate_limit_status'
+RATE_LIMIT_PATH     = '/1.1/application/rate_limit_status.json'
 
 STATE_DIR = expanduser('~') + '/state/'
 
@@ -87,7 +88,7 @@ def make_oauth_headers(verb, uri, params, body):
     oauth_params['oauth_signature'] = signature
     return { 'Authorization' : make_auth_header(uri, oauth_params) }
 
-def api_call(verb, route, params = {}, headers = {}, body = None, json = False):
+def api_call(verb, route, params = {}, headers = {}, body = None, loadJson = True):
     uri = API_TARGET + route
     conn = httplib.HTTPSConnection(API_TARGET)
     headers.update(make_oauth_headers(verb, uri, params, body))
@@ -95,7 +96,11 @@ def api_call(verb, route, params = {}, headers = {}, body = None, json = False):
         body = urlencode_space(body.items())
     params_str = '?' + urlencode_space(params.items())
     conn.request(verb, uri + params_str, body, headers)
-    return json.loads(conn.getresponse().read())
+    resp = conn.getresponse().read()
+    if loadJson:
+        return json.loads(resp)
+    else:
+        return resp
 
 #
 # File IO helpers
@@ -138,9 +143,6 @@ def delete_tweet(tweet_id):
         sys.exit(1)
 
 def send_tweet(msg, irc_user):
-    #if len(msg) > 140:
-    #    print irc_user + ': Your message was too long. Please shorten.'
-    #    sys.exit(1)
     resp = api_call(
         verb    = 'POST',
         route   = UPDATE_PATH,
@@ -149,7 +151,10 @@ def send_tweet(msg, irc_user):
     if 'id_str' in resp:
         print '\0037::\003 https://m.twitter.com/' + HANDLE + '/status/' + str(resp['id_str'])
     else:
-        print irc_user + ': bonk bonk glorp: ' + str(resp)
+	if 'errors' in resp and len(resp['errors']) == 1 and resp['errors'][0]['code'] == 186:
+		print irc_user + ': too long (' + str(len(msg)) + ')'
+	else:
+        	print irc_user + ': bonk bonk glorp: ' + str(resp)
         sys.exit(1)
 
 def get_latest_tweet(screen_name, chan, filtered=False):
@@ -169,7 +174,7 @@ def get_latest_tweet(screen_name, chan, filtered=False):
     out = []
     for r in resp:
         if str(r['id']) != old_id:
-            out += ["\0036@@\003 " + screen_name + ": " + r['text'].encode('ascii', 'ignore')]
+            out += ["\0036@@\003 " + screen_name + ": " + HTMLParser.HTMLParser().unescape(r['text'].encode('ascii', 'ignore'))]
         else:
             break
 
@@ -281,9 +286,9 @@ def get_mentions():
 
 def get_rate_limits():
   resp = api_call(
-      verb  = 'GET',
-      route = RATE_LIMIT_PATH,
-      json  = True)
+      verb     = 'GET',
+      route    = RATE_LIMIT_PATH,
+      loadJson = False)
   print resp
 
 if __name__ == '__main__':
