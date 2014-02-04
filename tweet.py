@@ -3,6 +3,7 @@ import binascii
 import hashlib
 import hmac
 import httplib
+import HTMLParser
 import random
 import sys
 import time
@@ -22,14 +23,16 @@ ACCESS_SECRET   = config('twitter.accessSecret')
 
 API_TARGET = 'api.twitter.com'
 
-STATUS_PATH     = '/1.1/statuses/user_timeline.json'
-UPDATE_PATH     = '/1.1/statuses/update.json'
-DESTROY_PATH    = '/1.1/statuses/destroy/'
-FOLLOWERS_PATH  = '/1.1/followers/ids.json'
-LOOKUP_PATH     = '/1.1/users/lookup.json'
-MENTIONS_PATH   = '/1.1/statuses/mentions_timeline.json'
-RETWEETS_PATH   = '/1.1/statuses/retweets_of_me.json'
-RETWEETERS_PATH = '/1.1/statuses/retweeters/ids.json'
+STATUS_PATH         = '/1.1/statuses/user_timeline.json'
+UPDATE_PATH         = '/1.1/statuses/update.json'
+DESTROY_PATH        = '/1.1/statuses/destroy/'
+FOLLOWERS_PATH      = '/1.1/followers/ids.json'
+LOOKUP_PATH         = '/1.1/users/lookup.json'
+MENTIONS_PATH       = '/1.1/statuses/mentions_timeline.json'
+RETWEETS_OF_ME_PATH = '/1.1/statuses/retweets_of_me.json'
+RETWEETERS_PATH     = '/1.1/statuses/retweeters/ids.json'
+RETWEETS_PATH       = '/1.1/statuses/retweet/'
+RATE_LIMIT_PATH     = '/1.1/application/rate_limit_status.json'
 
 STATE_DIR = expanduser('~') + '/state/'
 
@@ -85,7 +88,7 @@ def make_oauth_headers(verb, uri, params, body):
     oauth_params['oauth_signature'] = signature
     return { 'Authorization' : make_auth_header(uri, oauth_params) }
 
-def api_call(verb, route, params = {}, headers = {}, body = None):
+def api_call(verb, route, params = {}, headers = {}, body = None, loadJson = True):
     uri = API_TARGET + route
     conn = httplib.HTTPSConnection(API_TARGET)
     headers.update(make_oauth_headers(verb, uri, params, body))
@@ -93,7 +96,11 @@ def api_call(verb, route, params = {}, headers = {}, body = None):
         body = urlencode_space(body.items())
     params_str = '?' + urlencode_space(params.items())
     conn.request(verb, uri + params_str, body, headers)
-    return json.loads(conn.getresponse().read())
+    resp = conn.getresponse().read()
+    if loadJson:
+        return json.loads(resp)
+    else:
+        return resp
 
 #
 # File IO helpers
@@ -136,9 +143,6 @@ def delete_tweet(tweet_id):
         sys.exit(1)
 
 def send_tweet(msg, irc_user):
-    #if len(msg) > 140:
-    #    print irc_user + ': Your message was too long. Please shorten.'
-    #    sys.exit(1)
     resp = api_call(
         verb    = 'POST',
         route   = UPDATE_PATH,
@@ -147,24 +151,37 @@ def send_tweet(msg, irc_user):
     if 'id_str' in resp:
         print '\0037::\003 https://m.twitter.com/' + HANDLE + '/status/' + str(resp['id_str'])
     else:
-        print 'bonk bonk glorp: ' + str(resp)
+	if 'errors' in resp and len(resp['errors']) == 1 and resp['errors'][0]['code'] == 186:
+		print irc_user + ': too long (' + str(len(msg)) + ')'
+	else:
+        	print irc_user + ': bonk bonk glorp: ' + str(resp)
         sys.exit(1)
 
-def get_latest_tweet(screen_name):
+def get_latest_tweet(screen_name, chan, filtered=False):
+    TWEET_FILE = TWEET_FILE_BASE + chan + "_" + screen_name
     resp = api_call(
         verb   = 'GET',
         route  = STATUS_PATH,
-        params = { 'count': '5', 'screen_name': screen_name })
+        params = {
+            'include_rts': not filtered,
+            'exclude_replies': filtered,
+            'count': '5',
+            'screen_name': screen_name
+        })
 
-    old_id = try_read_file(TWEET_FILE_BASE + screen_name, '0')
+    old_id = try_read_file(TWEET_FILE, '0')
 
+    out = []
     for r in resp:
         if str(r['id']) != old_id:
-            print "\0036@@\003 " + screen_name + ": " + r['text'].encode('ascii', 'ignore')
+            out += ["\0036@@\003 " + screen_name + ": " + HTMLParser.HTMLParser().unescape(r['text'].encode('ascii', 'ignore'))]
         else:
             break
 
-    write_file(TWEET_FILE_BASE + screen_name, str(resp[0]['id']))
+    out.reverse()
+    print '\n'.join(out)
+
+    write_file(TWEET_FILE, str(resp[0]['id']))
 
 # Input: Array of user_id
 # Output: Array of screen_name
@@ -204,8 +221,10 @@ def get_retweets():
     data = json.loads(try_read_file(RETWEETS_FILE, '{}'))
     resp = api_call(
         verb   = 'GET',
-        route  = RETWEETS_PATH,
-        params = { 'trim_user': 'true', 'include_entities': 'false', 'count': '3' })
+        route  = RETWEETS_OF_ME_PATH,
+        params = { 'trim_user': 'true', 'include_entities': 'false', 'count': '5' })
+    if 'errors' in resp:
+        raise Exception(resp['errors'])
     for tweet in resp:
         old_uids = []
         if tweet['id_str'] in data:
@@ -220,9 +239,34 @@ def get_retweets():
             continue
         news = fetch_names(news)
         for screen_name in news:
-            text = unicode(tweet['text'], 'utf-8')
-            print '\0037RT\003 ' + screen_name + ': ' + text
+            print (u'\0037RT\003 ' + screen_name + u': ' + tweet['text']).encode('utf-8')
     write_file(RETWEETS_FILE, json.dumps(data, sort_keys=True, indent=4, separators=(',', ':')))
+
+def retweet(tweet_id):
+    resp = api_call(
+        verb  = 'POST',
+        route = RETWEETS_PATH + tweet_id + '.json')
+    print '\0037RT\'d\003: ' + resp['text'] + ' ( ' + resp['id_str'] + ' )'
+
+def get_latest_tweet_id(name):
+    resp = api_call(
+        verb   = 'GET',
+        route  = STATUS_PATH,
+        params = { 'screen_name': name, 'count': '1', 'include_rts': '1', 'trim_user': 'true' })
+    if isinstance(resp, (list, tuple)) and len(resp) > 0:
+        return str(resp[0]['id'])
+    else:
+        return ""
+
+def find_tweet_id_substr(name, frag):
+    resp = api_call(
+        verb   = 'GET',
+        route  = STATUS_PATH,
+        params = { 'screen_name': name, 'count': '70', 'include_rts': '1', 'trim_user': 'true' })
+    for tweet in resp:
+        if frag in tweet['text']:
+            return str(tweet['id'])
+    return ""
 
 def get_mentions():
     # TODO: filter out mentions from people we follow?
@@ -240,15 +284,34 @@ def get_mentions():
 
     write_file(MENTIONS_FILE, str(old_id))
 
+def get_rate_limits():
+  resp = api_call(
+      verb     = 'GET',
+      route    = RATE_LIMIT_PATH,
+      loadJson = False)
+  print resp
+
 if __name__ == '__main__':
     if len(sys.argv) < 2:
         print 'Supply command and at least one argument.'
         sys.exit(1)
 
     if sys.argv[1] == 'get_tweets':
-        get_latest_tweet(sys.argv[2])
+        filtered = len(sys.argv) == 5 and sys.argv[4] == 'filter'
+        get_latest_tweet(sys.argv[2], sys.argv[3], filtered)
     elif sys.argv[1] == 'tweet':
         send_tweet(sys.argv[2], sys.argv[3])
+    elif sys.argv[1] == 'retweet':
+        if len(sys.argv) == 4:
+            tweet_id = find_tweet_id_substr(sys.argv[2], sys.argv[3])
+        elif sys.argv[2].isdigit():
+            tweet_id = sys.argv[2]
+        else:
+            tweet_id = get_latest_tweet_id(sys.argv[2])
+        if tweet_id == "":
+            print "Couldn't find tweet :("
+        else:
+            retweet(tweet_id)
     elif sys.argv[1] == 'delete_tweet':
         delete_tweet(sys.argv[2])
     elif sys.argv[1] == 'update_followers':
@@ -257,5 +320,7 @@ if __name__ == '__main__':
         get_mentions()
     elif sys.argv[1] == 'get_retweets':
         get_retweets()
+    elif sys.argv[1] == 'get_rate_limits':
+        get_rate_limits()
     else:
         print 'Unknown command'
