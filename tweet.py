@@ -33,6 +33,7 @@ RETWEETS_OF_ME_PATH = '/1.1/statuses/retweets_of_me.json'
 RETWEETERS_PATH     = '/1.1/statuses/retweeters/ids.json'
 RETWEETS_PATH       = '/1.1/statuses/retweet/'
 RATE_LIMIT_PATH     = '/1.1/application/rate_limit_status.json'
+FOLLOW_PATH         = '/1.1/friendships/create.json'
 
 STATE_DIR = expanduser('~') + '/state/'
 
@@ -131,6 +132,20 @@ def write_file(path, contents):
 #
 # Twitter methods
 #
+
+def follow(user):
+    resp = api_call(
+        verb  = 'POST',
+        route = FOLLOW_PATH,
+        headers = { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body  = { 'screen_name': user, 'follow': True })
+    if 'name' in resp:
+        print 'Following ' + resp['name'].encode('utf-8')
+    elif 'errors' in resp:
+        print 'Errors: ' + resp['errors'][0]['message']
+    else:
+        print 'Uh error'
+        sys.exit(1)
 
 def delete_tweet(tweet_id):
     resp = api_call(
@@ -246,7 +261,10 @@ def retweet(tweet_id):
     resp = api_call(
         verb  = 'POST',
         route = RETWEETS_PATH + tweet_id + '.json')
-    print ('\0037RT\'d\003: ' + resp['text'] + ' ( ' + resp['id_str'] + ' )').encode('utf-8', 'ignore')
+    if 'errors' in resp:
+       print 'Errors: ' + resp['errors']
+    else:
+       print ('\0037RT\'d\003: ' + resp['text'] + ' ( ' + resp['id_str'] + ' )').encode('utf-8', 'ignore')
 
 def get_latest_tweet_id(name):
     resp = api_call(
@@ -262,7 +280,7 @@ def find_tweet_id_substr(name, frag):
     resp = api_call(
         verb   = 'GET',
         route  = STATUS_PATH,
-        params = { 'screen_name': name, 'count': '70', 'include_rts': '1', 'trim_user': 'true' })
+        params = { 'screen_name': name, 'count': '200', 'exclude_replies': 'false', 'include_rts': '1', 'trim_user': 'true' })
     for tweet in resp:
         if frag in tweet['text']:
             return str(tweet['id'])
@@ -322,5 +340,7 @@ if __name__ == '__main__':
         get_retweets()
     elif sys.argv[1] == 'get_rate_limits':
         get_rate_limits()
+    elif sys.argv[1] == 'follow':
+        follow(sys.argv[2])
     else:
         print 'Unknown command'

@@ -7,6 +7,5 @@ PROG=$HOME/bin/tweet.py
 # hope this is not needed, due to concurrency: killall -s 9 tweet.py
 for i in `cat $HOME/etc/twitter_$CHAN`
 do
-	$PROG get_tweets $i "$CHAN" $2 | $HOME/bin/throttle 1 > $CHAN_IN
-	sleep 1
+	$PROG get_tweets $i "$CHAN" $2 > $CHAN_IN
 done
